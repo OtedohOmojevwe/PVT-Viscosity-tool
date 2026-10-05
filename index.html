@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PVT Data Utility — Viscosity Pressure Matcher & QC</title>
+<meta name="description" content="A standalone PVT engineering utility for matching viscosity data to Differential Liberation pressure steps, with interpolation, extrapolation, data quality checks and visualization.">
+<meta name="author" content="PVT Data Utility">
+<meta property="og:title" content="PVT Data Utility — Viscosity Pressure Matcher & QC">
+<meta property="og:description" content="Match viscosity measurements to DL pressure steps and quickly check PVT data quality. Calculations run locally in your browser.">
+<meta property="og:type" content="website">
+<!-- After publishing with GitHub Pages, you can add:
+<meta property="og:url" content="https://YOURUSERNAME.github.io/pvt-data-utility/">
+<meta property="og:image" content="https://YOURUSERNAME.github.io/pvt-data-utility/preview.png">
+-->
+<style>
+:root{
+  --bg:#f5f7fb; --card:#ffffff; --text:#172033; --muted:#667085;
+  --line:#dfe4ec; --accent:#315efb; --accent2:#2448c8;
+  --good:#18794e; --warn:#a15c00; --bad:#b42318;
+  --shadow:0 8px 24px rgba(23,32,51,.07); --radius:16px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif;line-height:1.5}
+.container{max-width:1180px;margin:auto;padding:28px 18px 48px}
+header{background:linear-gradient(135deg,#172554,#315efb);color:#fff;border-radius:22px;padding:32px;margin-bottom:22px;box-shadow:var(--shadow)}
+header h1{margin:0 0 8px;font-size:clamp(28px,4vw,42px)}
+header p{margin:0;max-width:760px;color:#e8edff}
+.badge{display:inline-block;background:rgba(255,255,255,.14);padding:6px 10px;border-radius:999px;font-size:12px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px;margin-bottom:18px;box-shadow:var(--shadow)}
+h2{font-size:21px;margin:0 0 6px}
+h3{font-size:16px;margin:0 0 8px}
+.section-note{color:var(--muted);font-size:14px;margin:0 0 16px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:14px}
+th{background:#f8f9fc;font-weight:700}
+input,textarea{width:100%;padding:10px 11px;border:1px solid #cfd6e2;border-radius:9px;font:inherit;background:#fff;color:var(--text)}
+input:focus,textarea:focus{outline:2px solid rgba(49,94,251,.16);border-color:var(--accent)}
+textarea{min-height:190px;resize:vertical}
+button{border:0;border-radius:9px;padding:10px 14px;font:inherit;font-weight:650;cursor:pointer}
+.primary{background:var(--accent);color:#fff}
+.primary:hover{background:var(--accent2)}
+.secondary{background:#eef2ff;color:#2448c8}
+.ghost{background:#f2f4f7;color:#344054}
+.danger{background:#fff0ee;color:var(--bad)}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.small{font-size:12px;color:var(--muted)}
+.error{background:#fff1f0;border:1px solid #f5c2c0;color:var(--bad);padding:11px 13px;border-radius:9px;margin-top:12px;display:none}
+.warning{background:#fff8e8;border:1px solid #f1d48a;color:var(--warn);padding:11px 13px;border-radius:9px;margin-top:12px;display:none}
+.success{background:#edf9f3;border:1px solid #b9e4cd;color:var(--good);padding:11px 13px;border-radius:9px;margin-top:12px;display:none}
+.qc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media(max-width:850px){.qc-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.qc-grid{grid-template-columns:1fr}}
+.metric{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fbfcfe}
+.metric .value{font-size:24px;font-weight:750;margin-top:2px}
+.metric .label{font-size:12px;color:var(--muted)}
+.status{font-size:13px;font-weight:650;margin-top:5px}
+.good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+.scroll{overflow-x:auto}
+#chart{width:100%;height:390px;display:block;background:#fff;border:1px solid var(--line);border-radius:12px}
+.legend{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.line-swatch{width:18px;height:3px;display:inline-block;background:#315efb}
+footer{text-align:center;color:var(--muted);font-size:13px;padding:8px}
+.codebox{background:#101828;color:#e6eaf2;border-radius:10px;padding:12px 14px;font-family:Consolas,monospace;font-size:13px;overflow:auto}
+.remove-btn{padding:7px 10px}
+.empty{text-align:center;color:var(--muted);padding:20px}
+</style>
+</head>
+
+<body>
+<div class="container">
+<header>
+  <div class="badge">PVT ENGINEERING UTILITY</div>
+  <h1>Viscosity Pressure Matcher</h1>
+  <p>Match viscosity measurements to the pressure steps used in a Differential Liberation (DL) experiment — with automatic interpolation, extrapolation, data QC and a quick visualization.</p>
+</header>
+
+<div class="grid">
+  <section class="card">
+    <h2>1. Viscosity Experiment Data</h2>
+    <p class="section-note">Enter the pressure and viscosity values from your viscosity experiment. Pressure is in psia and viscosity is in cP.</p>
+    <div class="scroll">
+      <table id="visTable">
+        <thead><tr><th>#</th><th>Pressure (psia)</th><th>Viscosity (cP)</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="actions">
+      <button class="secondary" onclick="addRow()">+ Add row</button>
+      <button class="ghost" onclick="sortRows()">Sort by pressure</button>
+      <button class="danger" onclick="clearViscosity()">Clear</button>
+    </div>
+    <div id="rowError" class="error"></div>
+  </section>
+
+  <section class="card">
+    <h2>2. DL Target Pressures</h2>
+    <p class="section-note">Paste the pressure steps from your DL experiment. You can enter one pressure per line, or separate values with commas/semicolons.</p>
+    <textarea id="targets" placeholder="Example:
+3500
+3200
+3000
+2800
+2600
+2400"></textarea>
+    <div class="actions">
+      <button class="primary" onclick="calculate()">Match Viscosity Values</button>
+      <button class="ghost" onclick="document.getElementById('targets').value=''">Clear targets</button>
+    </div>
+    <div id="inputError" class="error"></div>
+  </section>
+</div>
+
+<section class="card">
+  <h2>3. Data Quality Check</h2>
+  <p class="section-note">This section helps you see whether the DL pressures are inside the measured viscosity range and flags values that require extrapolation.</p>
+  <div class="qc-grid">
+    <div class="metric"><div class="label">Viscosity points</div><div id="mPoints" class="value">—</div></div>
+    <div class="metric"><div class="label">Measured pressure range</div><div id="mRange" class="value" style="font-size:18px">—</div></div>
+    <div class="metric"><div class="label">DL target points</div><div id="mTargets" class="value">—</div></div>
+    <div class="metric"><div class="label">Exact / Interpolated</div><div id="mMatched" class="value">—</div></div>
+    <div class="metric"><div class="label">Extrapolated</div><div id="mExtra" class="value">—</div></div>
+    <div class="metric"><div class="label">Pressure ordering</div><div id="mOrder" class="status">—</div></div>
+    <div class="metric"><div class="label">Duplicate pressure check</div><div id="mDup" class="status">—</div></div>
+    <div class="metric"><div class="label">Viscosity trend</div><div id="mTrend" class="status">—</div></div>
+  </div>
+  <div id="qcMessage" class="warning"></div>
+</section>
+
+<section class="card">
+  <h2>4. Matched Results</h2>
+  <p class="section-note">Calculated values are estimates where interpolation or extrapolation was required. Extrapolated values should be reviewed carefully because they extend beyond the measured viscosity data.</p>
+  <div class="scroll">
+    <table id="resultsTable">
+      <thead><tr><th>DL Pressure (psia)</th><th>Viscosity (cP)</th><th>Method</th><th>Reference pressure(s)</th></tr></thead>
+      <tbody><tr><td colspan="4" class="empty">Run the matcher to see results.</td></tr></tbody>
+    </table>
+  </div>
+  <div class="actions">
+    <button class="secondary" onclick="copyResults()">Copy results</button>
+    <button class="secondary" onclick="downloadCSV()">Download CSV</button>
+    <button class="ghost" onclick="resetAll()">Reset all</button>
+  </div>
+  <div id="resultMessage" class="success"></div>
+</section>
+
+<section class="card">
+  <h2>5. Viscosity vs Pressure</h2>
+  <p class="section-note">Measured viscosity points are shown together with the values calculated at the DL pressure steps.</p>
+  <svg id="chart" viewBox="0 0 1000 390" preserveAspectRatio="none" aria-label="Viscosity versus pressure chart"></svg>
+  <div class="legend">
+    <span><i class="dot" style="background:#172554"></i>Measured viscosity</span>
+    <span><i class="dot" style="background:#315efb"></i>DL calculated point</span>
+    <span><i class="line-swatch"></i>Measured trend connection</span>
+  </div>
+</section>
+
+<section class="card">
+  <h2>How it works</h2>
+  <p class="section-note">The tool uses straight-line interpolation between the two nearest measured viscosity points. If a DL pressure lies outside the measured range, it uses the nearest two points to perform linear extrapolation.</p>
+  <div class="codebox">μ(P) = μ₁ + [(P − P₁)(μ₂ − μ₁) / (P₂ − P₁)]</div>
+  <p class="small" style="margin-top:12px">This is a data-matching utility, not a substitute for measured laboratory data or a full PVT model.</p>
+</section>
+
+<section class="card">
+  <h2>Privacy</h2>
+  <p class="section-note" style="margin-bottom:0"><strong>Your data stays in your browser.</strong> This standalone tool does not require an account, database, backend or file upload. Calculations are performed locally on your device.</p>
+</section>
+
+<footer>Standalone PVT Data Utility • Built for practical PVT data preparation and quality checking</footer>
+</div>
+
+<script>
+let lastResults = [];
+let lastData = [];
+
+function addRow(p="", v=""){
+  const tbody=document.querySelector("#visTable tbody");
+  const tr=document.createElement("tr");
+  tr.innerHTML=`
+    <td class="rownum"></td>
+    <td><input type="number" step="any" class="pressure" value="${p}" placeholder="e.g. 3000"></td>
+    <td><input type="number" step="any" class="viscosity" value="${v}" placeholder="e.g. 1.25"></td>
+    <td><button class="danger remove-btn" onclick="this.closest('tr').remove(); renumber()">Remove</button></td>`;
+  tbody.appendChild(tr); renumber();
+}
+function renumber(){
+  document.querySelectorAll("#visTable tbody tr").forEach((r,i)=>r.querySelector(".rownum").textContent=i+1);
+}
+function clearViscosity(){
+  document.querySelector("#visTable tbody").innerHTML="";
+  for(let i=0;i<5;i++) addRow();
+  hide("rowError"); updateQC([],[]);
+  drawChart([],[]);
+}
+function sortRows(){
+  const rows=[...document.querySelectorAll("#visTable tbody tr")];
+  const vals=rows.map(r=>({
+    p:parseFloat(r.querySelector(".pressure").value),
+    v:parseFloat(r.querySelector(".viscosity").value),
+    r
+  })).filter(x=>Number.isFinite(x.p)&&Number.isFinite(x.v));
+  vals.sort((a,b)=>a.p-b.p);
+  const tbody=document.querySelector("#visTable tbody");
+  vals.forEach(x=>tbody.appendChild(x.r));
+  renumber();
+}
+function getRows(){
+  const rows=[...document.querySelectorAll("#visTable tbody tr")];
+  const data=[], incomplete=[];
+  rows.forEach((r,i)=>{
+    const ps=r.querySelector(".pressure").value.trim();
+    const vs=r.querySelector(".viscosity").value.trim();
+    if(ps==="" && vs==="") return;
+    if(ps==="" || vs===""){ incomplete.push(i+1); return; }
+    const p=Number(ps), v=Number(vs);
+    if(Number.isFinite(p)&&Number.isFinite(v)) data.push({p,v,row:i+1});
+  });
+  return {data,incomplete};
+}
+function parseTargets(){
+  const raw=document.getElementById("targets").value.trim();
+  if(!raw) return [];
+  return raw.split(/[\n,;]+/).map(x=>Number(x.trim())).filter(Number.isFinite);
+}
+function linear(p,p1,v1,p2,v2){
+  return v1+(p-p1)*(v2-v1)/(p2-p1);
+}
+function calculateViscosity(p,data){
+  if(p===data[0].p) return {v:data[0].v,method:"Exact value",refs:`${data[0].p}`};
+  if(p===data[data.length-1].p) return {v:data[data.length-1].v,method:"Exact value",refs:`${data[data.length-1].p}`};
+  if(p<data[0].p){
+    return {v:linear(p,data[0].p,data[0].v,data[1].p,data[1].v),method:"Extrapolation (below range)",refs:`${data[0].p}, ${data[1].p}`};
+  }
+  if(p>data[data.length-1].p){
+    const n=data.length;
+    return {v:linear(p,data[n-2].p,data[n-2].v,data[n-1].p,data[n-1].v),method:"Extrapolation (above range)",refs:`${data[n-2].p}, ${data[n-1].p}`};
+  }
+  for(let i=0;i<data.length-1;i++){
+    if(p>=data[i].p && p<=data[i+1].p){
+      return {v:linear(p,data[i].p,data[i].v,data[i+1].p,data[i+1].v),method:"Interpolation",refs:`${data[i].p}, ${data[i+1].p}`};
+    }
+  }
+  return null;
+}
+function calculate(){
+  hide("inputError"); hide("rowError"); hide("resultMessage");
+  const {data,incomplete}=getRows();
+  const targets=parseTargets();
+  if(incomplete.length){
+    show("rowError",`Incomplete viscosity row(s): ${incomplete.join(", ")}. Fill both pressure and viscosity, or leave the row completely blank.`);
+    return;
+  }
+  if(data.length<2){
+    show("inputError","Please provide at least two complete viscosity pressure points.");
+    return;
+  }
+  const sorted=[...data].sort((a,b)=>a.p-b.p);
+  const duplicates=[];
+  for(let i=1;i<sorted.length;i++) if(sorted[i].p===sorted[i-1].p) duplicates.push(sorted[i].p);
+  if(duplicates.length){
+    show("inputError",`Duplicate viscosity pressure value(s): ${duplicates.join(", ")} psia. Each pressure should have one viscosity value.`);
+    return;
+  }
+  if(!targets.length){
+    show("inputError","Please enter at least one DL target pressure.");
+    return;
+  }
+  lastData=sorted;
+  lastResults=targets.map(p=>{
+    const r=calculateViscosity(p,sorted);
+    return {...r,p};
+  });
+  renderResults();
+  updateQC(sorted,lastResults);
+  drawChart(sorted,lastResults);
+  show("resultMessage",`${lastResults.length} DL pressure point(s) matched successfully.`);
+}
+function renderResults(){
+  const tbody=document.querySelector("#resultsTable tbody");
+  tbody.innerHTML="";
+  lastResults.forEach(r=>{
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td>${fmt(r.p)}</td><td>${fmt(r.v,8)}</td><td>${r.method}</td><td>${r.refs}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+function updateQC(data,results){
+  document.getElementById("mPoints").textContent=data.length?data.length:"—";
+  document.getElementById("mRange").textContent=data.length?`${fmt(data[0].p)} – ${fmt(data[data.length-1].p)}`:"—";
+  document.getElementById("mTargets").textContent=results.length?results.length:"—";
+  if(results.length){
+    const matched=results.filter(r=>r.method==="Exact value"||r.method==="Interpolation").length;
+    const extra=results.length-matched;
+    document.getElementById("mMatched").textContent=`${matched} / ${results.length}`;
+    document.getElementById("mExtra").textContent=extra;
+    const extraResults=results.filter(r=>r.method.startsWith("Extrapolation"));
+    let msg="";
+    if(extraResults.length){
+      const min=data[0].p,max=data[data.length-1].p;
+      const distances=extraResults.map(r=>r.p<min?min-r.p:r.p-max);
+      const maxD=Math.max(...distances);
+      msg=`${extraResults.length} DL point(s) require extrapolation. The furthest extrapolation is ${fmt(maxD)} psia beyond the measured range. Extrapolated values are estimates and should be reviewed carefully.`;
+      show("qcMessage",msg);
+    } else hide("qcMessage");
+  } else {
+    ["mMatched","mExtra"].forEach(id=>document.getElementById(id).textContent="—");
+    hide("qcMessage");
+  }
+  const rawRows=[...document.querySelectorAll("#visTable tbody .pressure")].map(x=>Number(x.value)).filter(Number.isFinite);
+  const ordered=rawRows.every((x,i)=>i===0||x>=rawRows[i-1]);
+  setStatus("mOrder",rawRows.length?(ordered?"Sorted ascending":"Not sorted — tool will sort for calculation"):"—",ordered?"good":"warn");
+  const ps=data.map(x=>x.p), dup=ps.some((x,i)=>i>0&&x===ps[i-1]);
+  setStatus("mDup",data.length?(dup?"Duplicate values found":"No duplicates detected"):"—",dup?"bad":"good");
+  if(data.length>=2){
+    let inc=true,dec=true;
+    for(let i=1;i<data.length;i++){
+      if(data[i].v<data[i-1].v) inc=false;
+      if(data[i].v>data[i-1].v) dec=false;
+    }
+    let trend=inc?"Viscosity increases with pressure":dec?"Viscosity decreases with pressure":"Non-monotonic trend";
+    setStatus("mTrend",trend,inc||dec?"good":"warn");
+  }else setStatus("mTrend","—","");
+}
+function setStatus(id,text,cls){
+  const e=document.getElementById(id); e.textContent=text; e.className="status "+(cls||"");
+}
+function fmt(x,dec=4){
+  if(!Number.isFinite(x)) return "—";
+  return Number(x.toFixed(dec)).toString();
+}
+function show(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display="block"}
+function hide(id){document.getElementById(id).style.display="none"}
+
+function copyResults(){
+  if(!lastResults.length){alert("Run the matcher first.");return}
+  const text=["DL Pressure (psia)\tViscosity (cP)\tMethod\tReference pressure(s)",...lastResults.map(r=>`${r.p}\t${r.v}\t${r.method}\t${r.refs}`)].join("\n");
+  navigator.clipboard.writeText(text).then(()=>show("resultMessage","Results copied to your clipboard.")).catch(()=>alert("Copy failed. Please copy the table manually."));
+}
+function downloadCSV(){
+  if(!lastResults.length){alert("Run the matcher first.");return}
+  const rows=[["DL Pressure (psia)","Viscosity (cP)","Method","Reference pressure(s)"],...lastResults.map(r=>[r.p,r.v,r.method,r.refs])];
+  const csv=rows.map(row=>row.map(v=>`"${String(v).replaceAll('"','""')}"`).join(",")).join("\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="matched_viscosity_results.csv";a.click();URL.revokeObjectURL(a.href);
+}
+function resetAll(){
+  document.getElementById("targets").value="";
+  lastResults=[];lastData=[];
+  clearViscosity();
+  document.querySelector("#resultsTable tbody").innerHTML='<tr><td colspan="4" class="empty">Run the matcher to see results.</td></tr>';
+  hide("inputError");hide("rowError");hide("resultMessage");
+}
+function drawChart(data,results){
+  const svg=document.getElementById("chart");
+  svg.innerHTML="";
+  if(!data.length){svg.innerHTML='<text x="500" y="205" text-anchor="middle" fill="#667085" font-size="16">Enter data and run the matcher to display the chart.</text>';return}
+  const W=1000,H=390, ml=75,mr=25,mt=25,mb=55;
+  const pw=W-ml-mr, ph=H-mt-mb;
+  const allP=data.map(d=>d.p).concat(results.map(r=>r.p));
+  const allV=data.map(d=>d.v).concat(results.map(r=>r.v));
+  let xmin=Math.min(...allP),xmax=Math.max(...allP),ymin=Math.min(...allV),ymax=Math.max(...allV);
+  if(xmin===xmax){xmin-=1;xmax+=1} if(ymin===ymax){ymin-=1;ymax+=1}
+  const xpad=(xmax-xmin)*.06, ypad=(ymax-ymin)*.10;
+  xmin-=xpad;xmax+=xpad;ymin-=ypad;ymax+=ypad;
+  const X=p=>ml+(p-xmin)/(xmax-xmin)*pw;
+  const Y=v=>(mt+ph)-(v-ymin)/(ymax-ymin)*ph;
+  const NS="http://www.w3.org/2000/svg";
+  function el(tag,attrs,text){
+    const e=document.createElementNS(NS,tag);
+    Object.entries(attrs).forEach(([k,v])=>e.setAttribute(k,v));
+    if(text!==undefined)e.textContent=text;
+    svg.appendChild(e);return e;
+  }
+  // grid and axes
+  for(let i=0;i<=5;i++){
+    const x=ml+i*pw/5, val=xmin+i*(xmax-xmin)/5;
+    el("line",{x1:x,y1:mt,x2:x,y2:mt+ph,stroke:"#e6eaf0"});
+    el("text",{x:x,y:H-28,"text-anchor":"middle",fill:"#667085","font-size":"12"},fmt(val));
+    const y=mt+ph-i*ph/5, vv=ymin+i*(ymax-ymin)/5;
+    el("line",{x1:ml,y1:y,x2:ml+pw,y2:y,stroke:"#e6eaf0"});
+    el("text",{x:ml-10,y:y+4,"text-anchor":"end",fill:"#667085","font-size":"12"},fmt(vv));
+  }
+  el("line",{x1:ml,y1:mt+ph,x2:ml+pw,y2:mt+ph,stroke:"#344054"});
+  el("line",{x1:ml,y1:mt,x2:ml,y2:mt+ph,stroke:"#344054"});
+  el("text",{x:ml+pw/2,y:H-8,"text-anchor":"middle",fill:"#344054","font-size":"13","font-weight":"600"},"Pressure (psia)");
+  el("text",{x:18,y:mt+ph/2,transform:`rotate(-90 18 ${mt+ph/2})`,"text-anchor":"middle",fill:"#344054","font-size":"13","font-weight":"600"},"Viscosity (cP)");
+  const points=data.map(d=>`${X(d.p)},${Y(d.v)}`).join(" ");
+  el("polyline",{points,fill:"none",stroke:"#315efb","stroke-width":"2.5"});
+  data.forEach(d=>el("circle",{cx:X(d.p),cy:Y(d.v),r:5,fill:"#172554"}));
+  results.forEach(r=>{
+    const fill=r.method.startsWith("Extrapolation")?"#a15c00":"#315efb";
+    el("circle",{cx:X(r.p),cy:Y(r.v),r:4.5,fill,stroke:"#fff","stroke-width":"1.5"});
+  });
+}
+for(let i=0;i<5;i++) addRow();
+drawChart([],[]);
+</script>
+</body>
+</html>
